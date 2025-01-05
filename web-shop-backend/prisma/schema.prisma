@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id Int @default(autoincrement()) @id
+  email String @unique
+  name String?
+  phoneNumber String? @unique @db.VarChar(15)
+  passwordHash String @unique
+  passwordSalt String @unique
+  roles UserRole[]
+  orders Order[]
+}
+
+model Role {
+  id Int @default(autoincrement()) @id
+  name String @unique
+  permissions RolePermission[]
+  users UserRole[]
+}
+
+model Permission {
+  id Int @default(autoincrement()) @id
+  name String @unique
+  roles RolePermission[]
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  @@id([roleId, permissionId])
+}
+
+model Product {
+  id Int @default(autoincrement()) @id
+  name String
+  description String?
+  price Float
+  stock Int
+  images String[]
+  orderItems OrderItem[]
+  categories ProductCategory[]
+  cartItems CartItem[]
+  specifications ProductSpecification[]
+}
+
+model ProductSpecification {
+  id Int @default (autoincrement()) @id
+  productId Int
+  name String
+  value String
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Category {
+  id Int @default(autoincrement()) @id
+  name String @unique
+  productCategories ProductCategory[]
+}
+
+model ProductCategory {
+  productId Int
+  categoryId Int
+  product Product @relation(fields: [productId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+  @@id([productId, categoryId])
+}
+
+model Order {
+  id Int @default(autoincrement()) @id
+  userId Int
+
+  status String @default("pending")
+  shippingAddress String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orderItems OrderItem[]
+  user User @relation(fields: [userId], references: [id])
+}
+
+model OrderItem {
+  id Int @default(autoincrement()) @id
+  orderId Int
+  productId Int
+  quantity Int
+  price Float
+  order Order @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Cart {
+  id Int @default(autoincrement()) @id
+  userId Int
+  cartItems CartItem[]
+}
+
+model CartItem {
+  id Int @default(autoincrement()) @id
+  cartId Int
+  productId Int
+  quantity Int
+  cart Cart @relation(fields: [cartId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+
+
+
+
+
+
+
