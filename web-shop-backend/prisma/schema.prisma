@@ -12,8 +12,10 @@ model User {
   email String @unique
   name String?
   phoneNumber String? @unique @db.VarChar(15)
-  passwordHash String @unique
+  passwordHash String
   passwordSalt String @unique
+  refreshToken String?  @unique
+
   roles UserRole[]
   orders Order[]
 }

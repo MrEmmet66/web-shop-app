@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, User } from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
@@ -21,8 +21,9 @@ export class AuthService {
         if (!isPasswordValid) {
             throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
         }
-
-        return this.generateJwtToken(user);
+        const tokens = await this.generateTokens(user.id, user.email);
+        await this.updateRefreshToken(user.id, tokens.refreshToken);
+        return tokens;
 
     }
 
@@ -30,7 +31,7 @@ export class AuthService {
         return await compare(password, passwordHash);
     }
 
-    async register(user: UserDto): Promise<string> {
+    async register(user: UserDto) {
         const userExists = await this.UsersService.getUserByEmail(user.email);
 
         if (userExists) {
@@ -47,12 +48,60 @@ export class AuthService {
             phoneNumber: user.phoneNumber,
         });
 
-        return this.generateJwtToken(registeredUser);
+        const tokens = await this.generateTokens(registeredUser.id, registeredUser.email);
+        await this.updateRefreshToken(registeredUser.id, tokens.refreshToken);
+        return tokens;
     }
 
-    async generateJwtToken(user: User): Promise<string> {
-        const payload = { id: user.id, email: user.email }
-        return this.jwtService.sign(payload);
+    async updateRefreshToken(userId: number, refreshToken: string) {
+        const hashedRefreshToken = await hash(refreshToken, 3);
+        await this.UsersService.updateUser(userId, {
+            refreshToken: hashedRefreshToken,
+        });
+    }
+
+    async refreshTokens(userId: number, refreshToken: string) {
+        const user = await this.UsersService.getUserById(userId);
+
+        if(!user || !user.refreshToken) {
+            throw new ForbiddenException('Access Denied');
+        }
+
+        const isRefreshTokenValid = await compare(refreshToken, user.refreshToken);
+
+        if(!isRefreshTokenValid) {
+            throw new ForbiddenException('Access Denied');
+        }
+
+        const tokens = await this.generateTokens(user.id, user.email);
+        await this.updateRefreshToken(user.id, tokens.refreshToken);
+        return tokens;
+    }
+
+    async generateTokens(userId: number, email: string) {
+        const [accessToken, refreshToken] = await Promise.all([
+            this.jwtService.signAsync({
+                userId: userId,
+                email: email,
+            },
+            {
+                secret: process.env.JWT_ACCESS_SECRET,
+                expiresIn: '30m',
+            }),
+            this.jwtService.signAsync({
+                userId: userId,
+                email: email,
+            },
+            {
+                secret: process.env.JWT_REFRESH_SECRET,
+                expiresIn: '30d',
+                
+            })
+        ]);
+        return {
+            accessToken,
+            refreshToken,
+        }
     }
     
 }
