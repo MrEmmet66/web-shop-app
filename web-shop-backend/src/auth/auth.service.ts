@@ -4,10 +4,11 @@ import { Prisma, User } from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
 import { compare, genSalt, hash } from 'bcryptjs';
 import { UserDto } from 'src/users/dto/user.dto';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
-    constructor(private readonly UsersService: UsersService, private readonly jwtService: JwtService) {}
+    constructor(private UsersService: UsersService, private jwtService: JwtService, private mailService: MailService) { }
 
     async login(email: string, password: string) {
         const user = await this.UsersService.getUserByEmail(email);
@@ -47,7 +48,8 @@ export class AuthService {
             passwordSalt: salt,
             phoneNumber: user.phoneNumber,
         });
-
+        const emailConfirmationToken = await this.generateJwtToken({ userId: registeredUser.id }, { secret: process.env.JWT_EMAIL_SECRET, expiresIn: '30m', });
+        await this.mailService.sendUserConfirmation(registeredUser, emailConfirmationToken);
         const tokens = await this.generateTokens(registeredUser.id, registeredUser.email);
         await this.updateRefreshToken(registeredUser.id, tokens.refreshToken);
         return tokens;
@@ -63,13 +65,13 @@ export class AuthService {
     async refreshTokens(userId: number, refreshToken: string) {
         const user = await this.UsersService.getUserById(userId);
 
-        if(!user || !user.refreshToken) {
+        if (!user || !user.refreshToken) {
             throw new ForbiddenException('Access Denied');
         }
 
         const isRefreshTokenValid = await compare(refreshToken, user.refreshToken);
 
-        if(!isRefreshTokenValid) {
+        if (!isRefreshTokenValid) {
             throw new ForbiddenException('Access Denied');
         }
 
@@ -79,29 +81,37 @@ export class AuthService {
     }
 
     async generateTokens(userId: number, email: string) {
-        const [accessToken, refreshToken] = await Promise.all([
-            this.jwtService.signAsync({
-                userId: userId,
-                email: email,
-            },
-            {
-                secret: process.env.JWT_ACCESS_SECRET,
-                expiresIn: '30m',
-            }),
-            this.jwtService.signAsync({
-                userId: userId,
-                email: email,
-            },
-            {
-                secret: process.env.JWT_REFRESH_SECRET,
-                expiresIn: '30d',
-                
-            })
-        ]);
+        const accessToken = await this.generateJwtToken({ userId: userId, email: email },
+            { secret: process.env.JWT_ACCESS_SECRET, expiresIn: '30m', })
+
+        const refreshToken = await this.generateJwtToken({ userId: userId, email: email },
+            { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '30d', })
+
         return {
             accessToken,
             refreshToken,
         }
     }
-    
+
+    async generateJwtToken(payload: any, options: any): Promise<string> {
+        return this.jwtService.signAsync(payload, options);
+    }
+
+    async confirmEmail(token: string) {
+        try {
+            const payload = this.jwtService.verify(token, { secret: process.env.JWT_EMAIL_SECRET });
+            const user = await this.UsersService.getUserById(payload.userId);
+
+            if (!user) {
+                throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+            }
+
+            await this.UsersService.updateUser(user.id, {
+                isActivated: true,
+            });
+        } catch(e) {
+            throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
+        } 
+    }
+
 }

@@ -21,8 +21,18 @@ export class AuthController {
     @UseGuards(RefreshTokenGuard)
     @Get('/refresh')
     refreshTokens(@Req() req) {
-        const userId = req.user.id;
+        const userId = req.user['userId'];
         const refreshToken = req.user.refreshToken;
+        console.log(userId, refreshToken);
         return this.authService.refreshTokens(userId, refreshToken);
+    }
+
+    @Get('/confirm')
+    confirmEmail(@Req() req) {
+        const token = req.query.token;
+        if(!token) {
+            throw new Error('Token not found');
+        }
+        return this.authService.confirmEmail(token);
     }
 }
