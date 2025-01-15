@@ -17,15 +17,20 @@ export const authSlice = createSlice({
     name: "auth",
     initialState,
     reducers: {
-        login: (state, action) => {
+        setAuthState: (state, action) => {
             state.jwtToken = action.payload.jwtToken;
             state.user = action.payload.user;
             state.error = null;
         },
-        logout: (state) => {
+        resetAuthState: (state) => {
             state.jwtToken = null;
             state.user = null;
             state.error = null;
+        },
+        refreshToken: (state, action) => {
+            console.log("refreshToken", action.payload);
+            
+            state.jwtToken = action.payload;
         },
         setError: (state, action) => {
             state.error = action.payload;
@@ -34,5 +39,5 @@ export const authSlice = createSlice({
 
 })
 
-export const { login, logout, setError } = authSlice.actions;
+export const { setAuthState, resetAuthState, refreshToken, setError } = authSlice.actions;
 export default authSlice.reducer;
