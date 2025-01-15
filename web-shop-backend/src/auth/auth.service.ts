@@ -10,7 +10,7 @@ import { MailService } from 'src/mail/mail.service';
 export class AuthService {
     constructor(private UsersService: UsersService, private jwtService: JwtService, private mailService: MailService) { }
 
-    async login(email: string, password: string) {
+    async login(email: string, password: string): Promise<{ user: User,accessToken: string, refreshToken: string}> {
         const user = await this.UsersService.getUserByEmail(email);
 
         if (!user) {
@@ -24,15 +24,15 @@ export class AuthService {
         }
         const tokens = await this.generateTokens(user.id, user.email);
         await this.updateRefreshToken(user.id, tokens.refreshToken);
-        return tokens;
 
+        return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     }
 
     async validatePassword(password: string, passwordHash: string): Promise<boolean> {
         return await compare(password, passwordHash);
     }
 
-    async register(user: UserDto) {
+    async register(user: UserDto): Promise<{ registeredUser: User, accessToken: string, refreshToken: string }> {
         const userExists = await this.UsersService.getUserByEmail(user.email);
 
         if (userExists) {
@@ -50,9 +50,11 @@ export class AuthService {
         });
         const emailConfirmationToken = await this.generateJwtToken({ userId: registeredUser.id }, { secret: process.env.JWT_EMAIL_SECRET, expiresIn: '30m', });
         await this.mailService.sendUserConfirmation(registeredUser, emailConfirmationToken);
+
         const tokens = await this.generateTokens(registeredUser.id, registeredUser.email);
         await this.updateRefreshToken(registeredUser.id, tokens.refreshToken);
-        return tokens;
+
+        return { registeredUser, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     }
 
     async updateRefreshToken(userId: number, refreshToken: string) {

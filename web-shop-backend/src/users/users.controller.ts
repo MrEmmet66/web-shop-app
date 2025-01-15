@@ -1,12 +1,16 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { AccessTokenGuard } from 'src/auth/guards/accesstoken.guard';
+import { UsersService } from './users.service';
+import { Request } from 'express';
 
-@Controller()
+@Controller('users')
 export class UsersController {
-    
+    constructor(private usersService: UsersService) {}
+
     @UseGuards(AccessTokenGuard)
-    @Get('users')
-    getUsers() {
-        return 'Users';
+    @Get('/profile')
+    getProfile(@Req() req: Request) {
+        const userId = req.user['userId'];
+        return this.usersService.getUserById(userId);
     }
 }
