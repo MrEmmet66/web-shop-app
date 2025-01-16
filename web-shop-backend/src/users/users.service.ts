@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, User } from '@prisma/client';
+import { Permission, Prisma, User } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
@@ -54,4 +54,26 @@ export class UsersService {
         });
     }
 
+    async getUserRoles(userId: number): Promise<string[]> {
+        const user = await this.prismaService.user.findUnique({
+            where: { id: userId },
+            include: { roles: { include: { role: true } } },
+        });
+
+        return user.roles.map((userRole) => userRole.role.name);
+    }
+
+    async getUserPermissions(userId: number): Promise<string[]> {
+        const user = await this.prismaService.user.findUnique({
+            where: { id: userId },
+            include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+    })
+        const permissions = user.roles.flatMap((userRole) => userRole.role.permissions)
+            .map((rolePermission) => rolePermission.permission.name);
+
+        return permissions;
+
+    }
+
+    
 }
