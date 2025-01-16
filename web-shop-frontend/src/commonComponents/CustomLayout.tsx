@@ -1,19 +1,64 @@
 "use client"
-import { useGetUserProfileQuery } from "@/features/auth/authEndpoints"
-import { useAppSelector } from "@/redux/hooks"
-import { Layout } from "antd"
-import { Content, Header } from "antd/es/layout/layout"
+
+import React, { useEffect, useState } from "react";
+import { Layout, Button } from "antd";
+import { useAppSelector, useAppDispatch } from "@/redux/hooks";
+import { useGetUserProfileQuery } from "@/features/auth/authEndpoints";
+import { setAuthState, resetAuthState } from "@/features/auth/authSlice";
+import UserMiniProfileModal from "@/features/users/components/UserMiniProfileModal";
+import { useRouter } from "next/router";
+import Link from "next/link";
+
+const { Header, Content } = Layout;
 
 function CustomLayout({ children }: React.PropsWithChildren) {
-  const { data, error, isLoading } = useGetUserProfileQuery()
+  const dispatch = useAppDispatch();
+  const authUser = useAppSelector((state) => state.auth.user);
+  const token = localStorage.getItem('token');
+  const { data: user, error, isLoading } = useGetUserProfileQuery(undefined, {
+    skip: !token
+  });
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      dispatch(setAuthState({ user, jwtToken: token }));
+    } else if (!token) {
+      dispatch(resetAuthState());
+    }
+  }, [user, token, dispatch]);
+
+  const showModal = () => {
+    setIsModalVisible(true);
+  };
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
+  };
+
 
   return (
     <Layout>
       <Header title="Web-Shop">
-        {error ? <div style={{ color: "white" }}>Error</div> : isLoading ? <div style={{ color: "white" }}>Loading</div> : data ? <div style={{ color: "white" }}>Welcome {data.name}</div> : null}
+        {authUser ? (
+          <div style={{ color: "white" }}>
+            Welcome <span onClick={showModal} style={{ cursor: "pointer" }}>{authUser.email}</span>
+          </div>
+        ) : (
+          <div style={{ color: "white" }}>
+            <Button type="primary" style={{ marginRight: '10px' }}>
+              <Link href="/login">Login</Link>
+            </Button>
+            <Button type="default">
+              <Link href="/register">Register</Link>
+            </Button>
+          </div>
+        )}
       </Header>
       <Content>{children}</Content>
+      {authUser && <UserMiniProfileModal visible={isModalVisible} onCancel={handleCancel} user={authUser} />}
     </Layout>
-  )
+  );
 }
-export default CustomLayout
+
+export default CustomLayout;

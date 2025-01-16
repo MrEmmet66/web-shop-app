@@ -2,8 +2,9 @@ import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common
 import { UserDto } from 'src/users/dto/user.dto';
 import { AuthService } from './auth.service';
 import { RefreshTokenGuard } from './guards/refreshtoken.guard';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AccessTokenGuard } from './guards/accesstoken.guard';
+import { log } from 'console';
 
 @Controller()
 export class AuthController {
@@ -22,15 +23,30 @@ export class AuthController {
         return this.authService.register(userDto);
     }
 
+    @Get('/test')
+    test(@Req() req) {
+        console.log(req.cookies)
+    }
+
     @UseGuards(RefreshTokenGuard)
     @Get('/refresh')
     async refreshTokens(@Req() req, @Res({passthrough: true}) res: Response) {
         const userId = req.user['userId'];
         const refreshToken = req.user.refreshToken;
-
+        console.log(req.cookies)
         const tokens = await this.authService.refreshTokens(userId, refreshToken);
         res.cookie('refreshToken', tokens.refreshToken, { maxAge: 30*24*60*60*1000,  httpOnly: true });
         return tokens;
+    }
+
+    @UseGuards(AccessTokenGuard)
+    @Post('/logout')
+    async logout(@Req() req, @Res({passthrough: true}) res: Response) {
+        const userId = req.user['userId'];
+        
+        await this.authService.logout(userId);
+        res.clearCookie('refreshToken');
+        return 'Logged out';
     }
 
     @Get('/confirm')

@@ -26,10 +26,12 @@ export const authSlice = createSlice({
             state.jwtToken = null;
             state.user = null;
             state.error = null;
+            localStorage.removeItem('token');
+            console.log('resetAuthState');
+            
         },
         refreshToken: (state, action) => {
-            console.log("refreshToken", action.payload);
-            
+            localStorage.setItem('token', action.payload.accessToken);
             state.jwtToken = action.payload;
         },
         setError: (state, action) => {

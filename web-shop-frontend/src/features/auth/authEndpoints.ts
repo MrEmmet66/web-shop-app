@@ -14,14 +14,14 @@ const authEndpoints = apiSlice.injectEndpoints({
         }),
         register: builder.mutation<AuthResponse, UserDto>({
             query: (user) => ({
-                url: 'auth/register',
+                url: '/register',
                 method: 'POST',
                 body: user
             })
         }),
         logout: builder.mutation({
             query: () => ({
-                url: 'auth/logout',
+                url: '/logout',
                 method: 'POST'
             })
         }),

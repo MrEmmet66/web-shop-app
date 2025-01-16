@@ -28,6 +28,12 @@ export class AuthService {
         return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
     }
 
+    async logout(userId: number) {
+        await this.UsersService.updateUser(userId, {
+            refreshToken: null,
+        });
+    }
+
     async validatePassword(password: string, passwordHash: string): Promise<boolean> {
         return await compare(password, passwordHash);
     }
