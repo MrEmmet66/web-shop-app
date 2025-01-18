@@ -12,7 +12,7 @@ export class UsersService {
         });
     }
 
-    async getUserByEmail(email: string): Promise<User | null> {
+    async getUserByEmail(email: string): Promise<User | null> {        
         return this.prismaService.user.findUnique({
             where: { email },
         });

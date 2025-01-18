@@ -5,6 +5,7 @@ import { RefreshTokenGuard } from './guards/refreshtoken.guard';
 import { Request, Response } from 'express';
 import { AccessTokenGuard } from './guards/accesstoken.guard';
 import { log } from 'console';
+import { ResetPasswordDto } from './dto/resetPassword.dto';
 
 @Controller()
 export class AuthController {
@@ -21,11 +22,6 @@ export class AuthController {
     @Post('/register')
     register(@Body() userDto: UserDto) {
         return this.authService.register(userDto);
-    }
-
-    @Get('/test')
-    test(@Req() req) {
-        console.log(req.cookies)
     }
 
     @UseGuards(RefreshTokenGuard)
@@ -56,6 +52,17 @@ export class AuthController {
             throw new Error('Token not found');
         }
         return this.authService.confirmEmail(token);
+    }
+
+    @Get('/resetPassword')
+    resetPassword(@Body() resetPasswordDto: ResetPasswordDto ) {
+        return this.authService.resetPassword(resetPasswordDto.password, resetPasswordDto.token);
+    }
+
+
+    @Post('/forgotPassword')
+    forgotPassword(@Body() email: { email: string } ) {
+        return this.authService.forgotPassword(email.email);
     }
 
 }

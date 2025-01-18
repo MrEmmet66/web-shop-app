@@ -122,4 +122,46 @@ export class AuthService {
         } 
     }
 
+    async forgotPassword(email: string): Promise<void> {
+        const user = await this.UsersService.getUserByEmail(email);
+
+        if (!user) {
+            throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+        }
+
+        const resetPasswordToken = await this.generateJwtToken({ userId: user.id }, { secret: process.env.JWT_RESET_PASSWORD_SECRET, expiresIn: '30m', });
+        
+        await this.UsersService.updateUser(user.id, {
+            passwordResetToken: resetPasswordToken,
+        })
+
+        await this.mailService.sendResetPassword(user, resetPasswordToken);
+    }
+
+    async resetPassword(newPassword: string, token: string) {
+        try {
+            const payload = this.jwtService.verify(token, { secret: process.env.JWT_RESET_PASSWORD_SECRET });
+            const user = await this.UsersService.getUserById(payload.userId);
+
+            if (!user) {
+                throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+            }
+
+            if(user.passwordResetToken !== token) {
+                throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
+            }
+
+            const salt = await genSalt(10);
+            const hashedPassword = await hash(newPassword, salt);
+            await this.UsersService.updateUser(user.id, {
+                passwordHash: hashedPassword,
+                passwordSalt: salt,
+                passwordResetToken: null,
+            });
+
+        } catch(e) {
+            throw new HttpException('Invalid token', HttpStatus.BAD_REQUEST);
+        }
+    }
+
 }

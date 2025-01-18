@@ -16,6 +16,7 @@ model User {
   passwordSalt String @unique
   refreshToken String?  @unique
   isActivated Boolean @default(false)
+  passwordResetToken String? @unique
 
   roles UserRole[]
   orders Order[]
