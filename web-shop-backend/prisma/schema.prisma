@@ -58,6 +58,7 @@ model Product {
   price Float
   stock Int
   images String[]
+  manufacturer String
   orderItems OrderItem[]
   categories ProductCategory[]
   cartItems CartItem[]
