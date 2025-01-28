@@ -6,5 +6,5 @@ export type CreateProductDto = {
     manufacturer: string;
     categories?: number[];
     images?: string[];
-    specifications?: { key: string; value: string }[];
+    specifications?: { name: string; value: string }[];
 }

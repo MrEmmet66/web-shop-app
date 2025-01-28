@@ -10,10 +10,16 @@ export class ProductsController {
     @Post()
     @UseInterceptors(FilesInterceptor('images', 10))
     async createProduct(
-        @Body() createProductDto: CreateProductDto,
+        @Body() requestProductDto: CreateProductDto,
         @UploadedFiles() files: Express.Multer.File[]
     ) {
-
+        console.log(requestProductDto);
+        
+        const createProductDto = this.productsService.transformRequestToProductDto(requestProductDto);
+        console.log(createProductDto);
+        console.log(files);
+        
+        
         const imageUrls = files ? files.map((file) => file.path) : [];
         return this.productsService.createProduct(createProductDto, imageUrls);
     }

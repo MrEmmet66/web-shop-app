@@ -1,3 +1,6 @@
+import { CategoriesService } from './categories/categories.service';
+import { CatergoriesController } from './categories/catergories.controller';
+import { CategoriesModule } from './categories/categories.module';
 import { ProductsController } from './products/products.controller';
 import { ProductsService } from './products/products.service';
 import { ProductsModule } from './products/products.module';
@@ -15,9 +18,10 @@ import { extname } from 'path';
 
 @Module({
   imports: [
+    CategoriesModule,
     MulterModule.register({
       storage: diskStorage({
-        destination: '/uploads',
+        destination: 'uploads',
         filename: (req, file, callback) => {
           const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
           callback(null, uniqueName);
@@ -34,8 +38,10 @@ import { extname } from 'path';
     AuthModule,
   ],
   controllers: [
+    CatergoriesController,
     ProductsController, AppController],
   providers: [
+    CategoriesService,
     ProductsService,
   ],
 })
