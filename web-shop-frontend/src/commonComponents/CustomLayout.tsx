@@ -52,6 +52,9 @@ function CustomLayout({ children }: React.PropsWithChildren) {
             <Button type="default">
               <Link href="/register">Register</Link>
             </Button>
+            <Button>
+              <Link href="/panel/create-product">Create Product</Link>
+            </Button>
           </div>
         )}
       </Header>

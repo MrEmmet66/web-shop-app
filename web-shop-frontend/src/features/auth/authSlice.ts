@@ -4,13 +4,11 @@ import { User } from "../users/user";
 interface AuthState {
     jwtToken: string | null;
     user: User | null;
-    error: string | null;
 }
 
 const initialState: AuthState = {
     jwtToken: null,
     user: null,
-    error: null
 };
 
 export const authSlice = createSlice({
@@ -20,12 +18,10 @@ export const authSlice = createSlice({
         setAuthState: (state, action) => {
             state.jwtToken = action.payload.jwtToken;
             state.user = action.payload.user;
-            state.error = null;
         },
         resetAuthState: (state) => {
             state.jwtToken = null;
             state.user = null;
-            state.error = null;
             localStorage.removeItem('token');
             console.log('resetAuthState');
             
@@ -34,12 +30,9 @@ export const authSlice = createSlice({
             localStorage.setItem('token', action.payload.accessToken);
             state.jwtToken = action.payload;
         },
-        setError: (state, action) => {
-            state.error = action.payload;
-        }
     }
 
 })
 
-export const { setAuthState, resetAuthState, refreshToken, setError } = authSlice.actions;
+export const { setAuthState, resetAuthState, refreshToken } = authSlice.actions;
 export default authSlice.reducer;
