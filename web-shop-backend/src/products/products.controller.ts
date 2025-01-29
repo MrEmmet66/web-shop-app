@@ -1,7 +1,8 @@
-import { Body, Controller, Post, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { CreateProductDto } from './dto/createProduct.dto';
+import { ProductsFilterDto } from './dto/productsFilter.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -22,5 +23,12 @@ export class ProductsController {
         
         const imageUrls = files ? files.map((file) => file.path) : [];
         return this.productsService.createProduct(createProductDto, imageUrls);
+    }
+
+    @Get()
+    async getProducts(@Query() filterDto: ProductsFilterDto) {
+        console.log(filterDto);
+        
+        
     }
 }

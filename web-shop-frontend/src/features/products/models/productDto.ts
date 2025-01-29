@@ -8,5 +8,5 @@ export type ProductDto = {
     manufacturer: string;
     specifications?: { name: string, value: string }[];
     images?: UploadFile[];
-    categories?: string[];
+    categories?: number[];
 }
