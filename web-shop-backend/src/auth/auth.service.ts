@@ -55,7 +55,7 @@ export class AuthService {
             phoneNumber: user.phoneNumber,
         });
         const emailConfirmationToken = await this.generateJwtToken({ userId: registeredUser.id }, { secret: process.env.JWT_EMAIL_SECRET, expiresIn: '30m', });
-        await this.mailService.sendUserConfirmation(registeredUser, emailConfirmationToken);
+        await this.mailService.sendUserConfirmationMail(registeredUser, emailConfirmationToken);
 
         const tokens = await this.generateTokens(registeredUser.id, registeredUser.email);
         await this.updateRefreshToken(registeredUser.id, tokens.refreshToken);
@@ -135,7 +135,7 @@ export class AuthService {
             passwordResetToken: resetPasswordToken,
         })
 
-        await this.mailService.sendResetPassword(user, resetPasswordToken);
+        await this.mailService.sendResetPasswordMail(user, resetPasswordToken);
     }
 
     async resetPassword(newPassword: string, token: string) {
