@@ -6,6 +6,7 @@ import { useLoginMutation } from "../authEndpoints"
 import { useAppDispatch } from "@/redux/hooks"
 import { setAuthState } from "../authSlice"
 import { AuthResponse } from "../models/authResponse"
+import { ACCESS_TOKEN_STORAGE } from "@/constants"
 
 function LoginForm() {
     const [email, setEmail] = useState<string>('')
@@ -20,7 +21,7 @@ function LoginForm() {
                 console.log(data);
                 
                 dispatch(setAuthState({user: data.user, jwtToken: data.accessToken}))
-                localStorage.setItem('token', data.accessToken)
+                localStorage.setItem(ACCESS_TOKEN_STORAGE, data.accessToken)
                 
             })
             
