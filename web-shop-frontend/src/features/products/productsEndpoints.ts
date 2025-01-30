@@ -3,37 +3,44 @@ import { Category } from "./models/category";
 import { Product } from "./models/product";
 import { ProductDto } from "./models/productDto";
 
-const authEndpoints = apiSlice.injectEndpoints({
-    endpoints: (builder) => ({
-        createProduct: builder.mutation<Product, ProductDto>({
-            query: (product: ProductDto) => {
-                const bodyFormData = new FormData();
-                product.images?.forEach((image) => {
-                    bodyFormData.append('images', image.originFileObj as Blob);
-                })
-                bodyFormData.append('name', product.name);
-                bodyFormData.append('description', product.description || '');
-                bodyFormData.append('price', product.price.toString());
-                bodyFormData.append('stock', product.stock.toString());
-                bodyFormData.append('manufacturer', product.manufacturer);
-                product.specifications?.forEach((spec) => {
-                    bodyFormData.append('specifications', JSON.stringify(spec));
-                })
-                product.categories?.forEach((category) => {
-                    bodyFormData.append('categories', category);
-                })
+const createProductFormData = (product: ProductDto): FormData => {
+  const formData = new FormData();
 
-                return {
-                    url: '/products',
-                    method: 'POST',
-                    body: bodyFormData
-                }
-            }
-        }),
-        getCategories: builder.query<Category[], void>({
-            query: () => '/categories'
-        })
-    })
-})
+  product.images?.forEach((image) => {
+    formData.append('images', image.originFileObj as Blob);
+  });
 
-export const { useCreateProductMutation, useGetCategoriesQuery } = authEndpoints;
+
+  formData.append('name', product.name);
+  formData.append('description', product.description || '');
+  formData.append('price', product.price.toString());
+  formData.append('stock', product.stock.toString());
+  formData.append('manufacturer', product.manufacturer);
+
+  product.specifications?.forEach((spec) => {
+    formData.append('specifications', JSON.stringify(spec));
+  });
+
+  product.categories?.forEach((category) => {
+    formData.append('categories', category);
+  });
+
+  return formData;
+};
+
+const productEndpoints = apiSlice.injectEndpoints({
+  endpoints: (builder) => ({
+    createProduct: builder.mutation<Product, ProductDto>({
+      query: (product: ProductDto) => ({
+        url: '/products',
+        method: 'POST',
+        body: createProductFormData(product),
+      }),
+    }),
+    getCategories: builder.query<Category[], void>({
+      query: () => '/categories',
+    }),
+  }),
+});
+
+export const { useCreateProductMutation, useGetCategoriesQuery } = productEndpoints;
