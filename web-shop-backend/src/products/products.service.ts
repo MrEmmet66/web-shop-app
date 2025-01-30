@@ -1,9 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Category, Product } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { ProductsFilterDto } from './dto/productsFilter.dto';
 import { CreateProductDto } from './dto/createProduct.dto';
 import { CategoriesService } from 'src/categories/categories.service';
+
+enum PaginationDefaults {
+    SKIP = 0,
+    TAKE = 10,
+}
 
 @Injectable()
 export class ProductsService {
@@ -64,29 +69,52 @@ export class ProductsService {
             },
         });
     }
-    transformRequestToProductDto(input): CreateProductDto {
-        try {
-            let specifications;
-            if (typeof input.specifications === 'string') {
-                specifications = [JSON.parse(input.specifications)];
-            } else if (Array.isArray(input.specifications)) {
-                specifications = input.specifications.map((spec: string) => JSON.parse(spec));
-            }
 
+    private parseCategories(categories: any): number[] | undefined {
+        if (!categories) return undefined;
+        return categories.map((category: string) => {
+            const parsed = parseInt(category, 10);
+            if (isNaN(parsed)) throw new BadRequestException(`Invalid category ID`);
+            return parsed;
+        });
+    }
+    
+    private parseSpecifications(specs: any): { name: string; value: string }[] | undefined {
+        if (!specs) return undefined;
+    
+        try {
+            if (typeof specs === 'string') {
+                return JSON.parse(specs);
+            }
+            if (Array.isArray(specs)) {
+                return specs.map(spec => JSON.parse(spec));
+            }
+        } catch (error) {
+            throw new BadRequestException('Invalid specifications format');
+        }
+    
+        return undefined;
+    }
+
+    private parseNumber(value: any, field: string): number {
+        const parsed = parseFloat(value);
+        if (isNaN(parsed)) throw new BadRequestException(`Invalid ${field} value`);
+        return parsed;
+    }
+
+    transformRequestToProductDto(input: any): CreateProductDto {
+        try {
             return {
                 name: input.name,
                 description: input.description || undefined,
-                price: parseFloat(input.price),
-                stock: parseInt(input.stock, 10),
+                price: this.parseNumber(input.price, 'price'),
+                stock: this.parseNumber(input.stock, 'stock'),
                 manufacturer: input.manufacturer,
-                categories: input.categories ? input.categories.map((category: string) => parseInt(category, 10)) : undefined,
-                specifications: specifications ? specifications.map((spec: any) => ({
-                    name: spec.name,
-                    value: spec.value,
-                })) : undefined,
+                categories: this.parseCategories(input.categories),
+                specifications: this.parseSpecifications(input.specifications),
             };
         } catch (error) {
-            throw new Error('Invalid input format');
+            throw new BadRequestException(`Invalid input format: ${error.message}`);
         }
     }
 
@@ -107,8 +135,8 @@ export class ProductsService {
         }
 
         return {
-            skip: skip ?? 0,
-            take: take ?? 10,
+            skip: skip ?? PaginationDefaults.SKIP,
+            take: take ?? PaginationDefaults.TAKE,
             minPrice: minPrice ?? 0,
             maxPrice: maxPrice ?? Number.MAX_VALUE,
             name: name ?? '',
@@ -119,45 +147,42 @@ export class ProductsService {
 
     }
 
+    private buildCategoryFilter(categories?: Category[]): any {
+        if (!categories || categories.length === 0) return undefined;
+        return { categories: { some: { categoryId: { in: categories.map(category => category.id) } } } };
+    }
+
     async getManufacturers(name?: string, categories?: Category[]): Promise<string[]> {
+        const categoryFilter = this.buildCategoryFilter(categories);
+
         return this.prismaService.product.findMany({
             where: {
-                name: {
-                    contains: name,
-                },
-                categories: {
-                    some: {
-                        categoryId: {
-                            in: categories.map((category) => category.id),
-                        },
-                    },
-                },
+                name: name ? { contains: name } : undefined,
+                ...categoryFilter,
             },
             distinct: ['manufacturer'],
-        }).then((products) => products.map((product) => product.manufacturer));
+        }).then(products => products.map(product => product.manufacturer));
     }
 
 
+
     async getPagedProductsByFilter(filterDto: ProductsFilterDto): Promise<Product[]> {
+        const categoryFilter = this.buildCategoryFilter(filterDto.categories);
+
         return this.prismaService.product.findMany({
             where: {
                 AND: [
                     { price: { gte: filterDto.minPrice } },
                     { price: { lte: filterDto.maxPrice } },
                     { name: { contains: filterDto.name } },
-                    { manufacturer: { in: filterDto.manufacturers } },
-                    { categories: { some: { categoryId: { in: filterDto.categories.map((category) => category.id) } } } },
+                    { manufacturer: filterDto.manufacturers?.length ? { in: filterDto.manufacturers } : undefined },
+                    categoryFilter,
                 ],
             },
             skip: filterDto.skip,
             take: filterDto.take,
-            include: {
-                categories: true,
-                specifications: true,
-            },
+            include: { categories: true, specifications: true },
         });
-
     }
-
 
 }
