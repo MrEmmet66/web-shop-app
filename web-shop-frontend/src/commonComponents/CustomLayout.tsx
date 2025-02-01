@@ -8,13 +8,14 @@ import { setAuthState, resetAuthState } from "@/features/auth/authSlice";
 import UserMiniProfileModal from "@/features/users/components/UserMiniProfileModal";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import { ACCESS_TOKEN_STORAGE } from "@/constants";
 
 const { Header, Content } = Layout;
 
 function CustomLayout({ children }: React.PropsWithChildren) {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((state) => state.auth.user);
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
   const { data: user, error, isLoading } = useGetUserProfileQuery(undefined, {
     skip: !token
   });
