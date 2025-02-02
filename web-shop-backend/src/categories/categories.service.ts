@@ -55,6 +55,22 @@ export class CategoriesService {
         });
     }
 
+    async getByProductName(productName: string): Promise<Category[]> {
+        return this.prismaService.category.findMany({
+            where: {
+                productCategories: {
+                    some: {
+                        product: {
+                            name: {
+                                contains: productName,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     
 
 
