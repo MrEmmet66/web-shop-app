@@ -27,8 +27,6 @@ export class ProductsController {
 
     @Get()
     async getProducts(@Query() filterDto: ProductsFilterDto) {
-        console.log(filterDto);
-        
-        
+        return this.productsService.getProductsWithFilters(filterDto);
     }
 }

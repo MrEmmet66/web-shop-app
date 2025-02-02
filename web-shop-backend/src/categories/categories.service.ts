@@ -56,7 +56,7 @@ export class CategoriesService {
     }
 
     async getByProductName(productName: string): Promise<Category[]> {
-        return await this.prismaService.category.findMany({
+        return this.prismaService.category.findMany({
             where: {
                 productCategories: {
                     some: {
@@ -66,9 +66,9 @@ export class CategoriesService {
                             },
                         },
                     },
-                }
-            }
-        })
+                },
+            },
+        });
     }
 
     

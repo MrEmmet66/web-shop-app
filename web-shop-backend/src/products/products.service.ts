@@ -1,18 +1,162 @@
-import { Injectable } from '@nestjs/common';
-import { Category, Product } from '@prisma/client';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { Category, Prisma, Product } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { ProductsFilterDto } from './dto/productsFilter.dto';
 import { CreateProductDto } from './dto/createProduct.dto';
 import { CategoriesService } from 'src/categories/categories.service';
 
+enum PaginationDefaults {
+    SKIP = 0,
+    TAKE = 10,
+}
+
+type FilterStrategy<T> = {
+    field: keyof ProductsFilterDto;
+    buildCondition: (value: T) => Prisma.ProductWhereInput;
+    getDynamicValue: (baseConditions: Prisma.ProductWhereInput) => Promise<T>;
+};
+
 @Injectable()
 export class ProductsService {
-    constructor(private prismaService: PrismaService, private categoriesService: CategoriesService) { }
+
+
+    constructor(private prisma: PrismaService, private categoriesService: CategoriesService) { }
+
+    private filterStrategies: FilterStrategy<any>[] = [
+        {
+            field: 'name',
+            buildCondition: (value: string) => ({
+                name: value ? { contains: value, mode: 'insensitive' } : undefined
+            }),
+            getDynamicValue: async () => ''
+        },
+        {
+            field: 'minPrice',
+            buildCondition: (value: number) => ({
+                price: { gte: value }
+            }),
+            getDynamicValue: async (conditions) => {
+                const result = await this.prisma.product.aggregate({
+                    where: conditions,
+                    _min: { price: true }
+                });
+                return result._min.price || 0;
+            }
+        },
+        {
+            field: 'maxPrice',
+            buildCondition: (value: number) => ({
+                price: { lte: value }
+            }),
+            getDynamicValue: async (conditions) => {
+                const result = await this.prisma.product.aggregate({
+                    where: conditions,
+                    _max: { price: true }
+                });
+                return result._max.price || 0;
+            }
+        },
+        {
+            field: 'manufacturers',
+            buildCondition: (values: string[]) => ({
+                manufacturer: values && values.length ? { in: values } : undefined
+            }),
+            getDynamicValue: async (conditions) => {
+                const manufacturers = await this.prisma.product.findMany({
+                    where: conditions,
+                    select: { manufacturer: true },
+                    distinct: ['manufacturer']
+                });
+                return manufacturers.map(m => m.manufacturer);
+            }
+        },
+        {
+            field: 'categories',
+            buildCondition: (values: Category[]) => ({
+                categories: values && values.length ? {
+                    some: {
+                        categoryId: {
+                            in: values.map(cat => cat.id)
+                        }
+                    }
+                } : undefined
+            }),
+            getDynamicValue: async (conditions) => {
+                const categories = await this.prisma.productCategory.findMany({
+                    where: { product: conditions },
+                    select: { category: true },
+                    distinct: ['categoryId']
+                });
+                return categories.map(c => c.category);
+            }
+        }
+    ];
+
+    async getProductsWithFilters(partialFilter: Partial<ProductsFilterDto>) {
+        const baseWhereConditions = this.buildWhereConditions(partialFilter);
+        const dynamicValues = await this.getDynamicFilterValues(baseWhereConditions);
+
+        const completeFilter = {
+            skip: partialFilter.skip ?? PaginationDefaults.SKIP,
+            take: partialFilter.take ?? PaginationDefaults.TAKE,
+            ...this.filterStrategies.reduce((acc, strategy) => ({
+                ...acc,
+                [strategy.field]: partialFilter[strategy.field] ?? dynamicValues[strategy.field]
+            }), {})
+        } as ProductsFilterDto;
+
+        const whereConditions = this.buildWhereConditions(completeFilter);
+
+        const [products, total] = await Promise.all([
+            this.prisma.product.findMany({
+                where: whereConditions,
+                skip: completeFilter.skip,
+                take: completeFilter.take,
+                include: {
+                    categories: {
+                        include: {
+                            category: true
+                        }
+                    },
+                    specifications: true
+                }
+            }),
+            this.prisma.product.count({
+                where: whereConditions
+            })
+        ]);
+
+        return {
+            products,
+            total,
+            filter: completeFilter
+        };
+    }
+
+    private buildWhereConditions(filter: Partial<ProductsFilterDto>): Prisma.ProductWhereInput {
+        return this.filterStrategies.reduce(
+            (conditions, strategy) => ({
+                ...conditions,
+                ...strategy.buildCondition(filter[strategy.field])
+            }),
+            {}
+        );
+    }
+
+    private async getDynamicFilterValues(baseConditions: Prisma.ProductWhereInput) {
+        const dynamicValues = await Promise.all(
+            this.filterStrategies.map(async strategy => ({
+                [strategy.field]: await strategy.getDynamicValue(baseConditions)
+            }))
+        );
+
+        return Object.assign({}, ...dynamicValues);
+    }
 
     async createProduct(createProductDto: CreateProductDto, imageUrls: string[]): Promise<Product> {
         const { categories, specifications, ...productData } = createProductDto;
 
-        return this.prismaService.product.create({
+        return this.prisma.product.create({
             data: {
                 ...productData,
                 images: imageUrls,
@@ -35,7 +179,7 @@ export class ProductsService {
     }
 
     async getByCategory(categoryId: number): Promise<Product[]> {
-        return this.prismaService.product.findMany({
+        return this.prisma.product.findMany({
             where: {
                 categories: {
                     some: {
@@ -47,13 +191,13 @@ export class ProductsService {
     }
 
     async getProductById(productId: number): Promise<Product | null> {
-        return this.prismaService.product.findUnique({
+        return this.prisma.product.findUnique({
             where: { id: productId },
         });
     }
 
     async assignCategories(productId: number, categoryIds: number[]): Promise<Product> {
-        return this.prismaService.product.update({
+        return this.prisma.product.update({
             where: { id: productId },
             data: {
                 categories: {
@@ -64,100 +208,53 @@ export class ProductsService {
             },
         });
     }
-    transformRequestToProductDto(input): CreateProductDto {
-        try {
-            let specifications;
-            if (typeof input.specifications === 'string') {
-                specifications = [JSON.parse(input.specifications)];
-            } else if (Array.isArray(input.specifications)) {
-                specifications = input.specifications.map((spec: string) => JSON.parse(spec));
-            }
 
+    private parseCategories(categories: any): number[] | undefined {
+        if (!categories) return undefined;
+        return categories.map((category: string) => {
+            const parsed = parseInt(category, 10);
+            if (isNaN(parsed)) throw new BadRequestException(`Invalid category ID`);
+            return parsed;
+        });
+    }
+
+    private parseSpecifications(specs: any): { name: string; value: string }[] | undefined {
+        if (!specs) return undefined;
+
+        try {
+            if (typeof specs === 'string') {
+                return JSON.parse(specs);
+            }
+            if (Array.isArray(specs)) {
+                return specs.map(spec => JSON.parse(spec));
+            }
+        } catch (error) {
+            throw new BadRequestException('Invalid specifications format');
+        }
+
+        return undefined;
+    }
+
+    private parseNumber(value: any, field: string): number {
+        const parsed = parseFloat(value);
+        if (isNaN(parsed)) throw new BadRequestException(`Invalid ${field} value`);
+        return parsed;
+    }
+
+    transformRequestToProductDto(input: any): CreateProductDto {
+        try {
             return {
                 name: input.name,
                 description: input.description || undefined,
-                price: parseFloat(input.price),
-                stock: parseInt(input.stock, 10),
+                price: this.parseNumber(input.price, 'price'),
+                stock: this.parseNumber(input.stock, 'stock'),
                 manufacturer: input.manufacturer,
-                categories: input.categories ? input.categories.map((category: string) => parseInt(category, 10)) : undefined,
-                specifications: specifications ? specifications.map((spec: any) => ({
-                    name: spec.name,
-                    value: spec.value,
-                })) : undefined,
+                categories: this.parseCategories(input.categories),
+                specifications: this.parseSpecifications(input.specifications),
             };
         } catch (error) {
-            throw new Error('Invalid input format');
+            throw new BadRequestException(`Invalid input format: ${error.message}`);
         }
     }
-
-    async getDefaultProductFilterDto(productsFilter: ProductsFilterDto): Promise<ProductsFilterDto> {
-        const { name, categories, manufacturers, minPrice, maxPrice, skip, take } = productsFilter;
-
-        const hasCategories = categories && categories.length > 0;
-        const hasManufacturers = manufacturers && manufacturers.length > 0;
-
-        let autoCategories = categories;
-        if (name && !hasCategories) {
-            autoCategories = await this.categoriesService.getByProductName(name);
-        }
-
-        let autoManufacturers = manufacturers;
-        if ((name || hasCategories) && !hasManufacturers) {
-            autoManufacturers = await this.getManufacturers(name, autoCategories);
-        }
-
-        return {
-            skip: skip ?? 0,
-            take: take ?? 10,
-            minPrice: minPrice ?? 0,
-            maxPrice: maxPrice ?? Number.MAX_VALUE,
-            name: name ?? '',
-            manufacturers: autoManufacturers ?? [],
-            categories: autoCategories ?? [],
-        };
-
-
-    }
-
-    async getManufacturers(name?: string, categories?: Category[]): Promise<string[]> {
-        return this.prismaService.product.findMany({
-            where: {
-                name: {
-                    contains: name,
-                },
-                categories: {
-                    some: {
-                        categoryId: {
-                            in: categories.map((category) => category.id),
-                        },
-                    },
-                },
-            },
-            distinct: ['manufacturer'],
-        }).then((products) => products.map((product) => product.manufacturer));
-    }
-
-
-    async getPagedProductsByFilter(filterDto: ProductsFilterDto): Promise<Product[]> {
-        return this.prismaService.product.findMany({
-            where: {
-                AND: [
-                    { price: { gte: filterDto.minPrice } },
-                    { price: { lte: filterDto.maxPrice } },
-                    { name: { contains: filterDto.name } },
-                    { manufacturer: { in: filterDto.manufacturers } },
-                    { categories: { some: { categoryId: { in: filterDto.categories.map((category) => category.id) } } } },
-                ],
-            },
-            skip: filterDto.skip,
-            take: filterDto.take,
-            include: {
-                categories: true,
-                specifications: true,
-            },
-        });
-
-    }
-
 
 }

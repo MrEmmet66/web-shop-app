@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { User } from "../users/user";
+import { ACCESS_TOKEN_STORAGE } from "@/constants";
 
 interface AuthState {
     jwtToken: string | null;
@@ -22,12 +23,12 @@ export const authSlice = createSlice({
         resetAuthState: (state) => {
             state.jwtToken = null;
             state.user = null;
-            localStorage.removeItem('token');
+            localStorage.removeItem(ACCESS_TOKEN_STORAGE);
             console.log('resetAuthState');
             
         },
         refreshToken: (state, action) => {
-            localStorage.setItem('token', action.payload.accessToken);
+            localStorage.setItem(ACCESS_TOKEN_STORAGE, action.payload.accessToken);
             state.jwtToken = action.payload;
         },
     }
