@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Category, Product } from '@prisma/client';
+import { Category, Prisma, Product } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { ProductsFilterDto } from './dto/productsFilter.dto';
 import { CreateProductDto } from './dto/createProduct.dto';
@@ -10,14 +10,153 @@ enum PaginationDefaults {
     TAKE = 10,
 }
 
+type FilterStrategy<T> = {
+    field: keyof ProductsFilterDto;
+    buildCondition: (value: T) => Prisma.ProductWhereInput;
+    getDynamicValue: (baseConditions: Prisma.ProductWhereInput) => Promise<T>;
+};
+
 @Injectable()
 export class ProductsService {
-    constructor(private prismaService: PrismaService, private categoriesService: CategoriesService) { }
+
+
+    constructor(private prisma: PrismaService, private categoriesService: CategoriesService) { }
+
+    private filterStrategies: FilterStrategy<any>[] = [
+        {
+            field: 'name',
+            buildCondition: (value: string) => ({
+                name: value ? { contains: value, mode: 'insensitive' } : undefined
+            }),
+            getDynamicValue: async () => ''
+        },
+        {
+            field: 'minPrice',
+            buildCondition: (value: number) => ({
+                price: { gte: value }
+            }),
+            getDynamicValue: async (conditions) => {
+                const result = await this.prisma.product.aggregate({
+                    where: conditions,
+                    _min: { price: true }
+                });
+                return result._min.price || 0;
+            }
+        },
+        {
+            field: 'maxPrice',
+            buildCondition: (value: number) => ({
+                price: { lte: value }
+            }),
+            getDynamicValue: async (conditions) => {
+                const result = await this.prisma.product.aggregate({
+                    where: conditions,
+                    _max: { price: true }
+                });
+                return result._max.price || 0;
+            }
+        },
+        {
+            field: 'manufacturers',
+            buildCondition: (values: string[]) => ({
+                manufacturer: values && values.length ? { in: values } : undefined
+            }),
+            getDynamicValue: async (conditions) => {
+                const manufacturers = await this.prisma.product.findMany({
+                    where: conditions,
+                    select: { manufacturer: true },
+                    distinct: ['manufacturer']
+                });
+                return manufacturers.map(m => m.manufacturer);
+            }
+        },
+        {
+            field: 'categories',
+            buildCondition: (values: Category[]) => ({
+                categories: values && values.length ? {
+                    some: {
+                        categoryId: {
+                            in: values.map(cat => cat.id)
+                        }
+                    }
+                } : undefined
+            }),
+            getDynamicValue: async (conditions) => {
+                const categories = await this.prisma.productCategory.findMany({
+                    where: { product: conditions },
+                    select: { category: true },
+                    distinct: ['categoryId']
+                });
+                return categories.map(c => c.category);
+            }
+        }
+    ];
+
+    async getProductsWithFilters(partialFilter: Partial<ProductsFilterDto>) {
+        const baseWhereConditions = this.buildWhereConditions(partialFilter);
+        const dynamicValues = await this.getDynamicFilterValues(baseWhereConditions);
+
+        const completeFilter = {
+            skip: partialFilter.skip ?? PaginationDefaults.SKIP,
+            take: partialFilter.take ?? PaginationDefaults.TAKE,
+            ...this.filterStrategies.reduce((acc, strategy) => ({
+                ...acc,
+                [strategy.field]: partialFilter[strategy.field] ?? dynamicValues[strategy.field]
+            }), {})
+        } as ProductsFilterDto;
+
+        const whereConditions = this.buildWhereConditions(completeFilter);
+
+        const [products, total] = await Promise.all([
+            this.prisma.product.findMany({
+                where: whereConditions,
+                skip: completeFilter.skip,
+                take: completeFilter.take,
+                include: {
+                    categories: {
+                        include: {
+                            category: true
+                        }
+                    },
+                    specifications: true
+                }
+            }),
+            this.prisma.product.count({
+                where: whereConditions
+            })
+        ]);
+
+        return {
+            products,
+            total,
+            filter: completeFilter
+        };
+    }
+
+    private buildWhereConditions(filter: Partial<ProductsFilterDto>): Prisma.ProductWhereInput {
+        return this.filterStrategies.reduce(
+            (conditions, strategy) => ({
+                ...conditions,
+                ...strategy.buildCondition(filter[strategy.field])
+            }),
+            {}
+        );
+    }
+
+    private async getDynamicFilterValues(baseConditions: Prisma.ProductWhereInput) {
+        const dynamicValues = await Promise.all(
+            this.filterStrategies.map(async strategy => ({
+                [strategy.field]: await strategy.getDynamicValue(baseConditions)
+            }))
+        );
+
+        return Object.assign({}, ...dynamicValues);
+    }
 
     async createProduct(createProductDto: CreateProductDto, imageUrls: string[]): Promise<Product> {
         const { categories, specifications, ...productData } = createProductDto;
 
-        return this.prismaService.product.create({
+        return this.prisma.product.create({
             data: {
                 ...productData,
                 images: imageUrls,
@@ -40,7 +179,7 @@ export class ProductsService {
     }
 
     async getByCategory(categoryId: number): Promise<Product[]> {
-        return this.prismaService.product.findMany({
+        return this.prisma.product.findMany({
             where: {
                 categories: {
                     some: {
@@ -52,13 +191,13 @@ export class ProductsService {
     }
 
     async getProductById(productId: number): Promise<Product | null> {
-        return this.prismaService.product.findUnique({
+        return this.prisma.product.findUnique({
             where: { id: productId },
         });
     }
 
     async assignCategories(productId: number, categoryIds: number[]): Promise<Product> {
-        return this.prismaService.product.update({
+        return this.prisma.product.update({
             where: { id: productId },
             data: {
                 categories: {
@@ -78,10 +217,10 @@ export class ProductsService {
             return parsed;
         });
     }
-    
+
     private parseSpecifications(specs: any): { name: string; value: string }[] | undefined {
         if (!specs) return undefined;
-    
+
         try {
             if (typeof specs === 'string') {
                 return JSON.parse(specs);
@@ -92,7 +231,7 @@ export class ProductsService {
         } catch (error) {
             throw new BadRequestException('Invalid specifications format');
         }
-    
+
         return undefined;
     }
 
@@ -116,73 +255,6 @@ export class ProductsService {
         } catch (error) {
             throw new BadRequestException(`Invalid input format: ${error.message}`);
         }
-    }
-
-    async getDefaultProductFilterDto(productsFilter: ProductsFilterDto): Promise<ProductsFilterDto> {
-        const { name, categories, manufacturers, minPrice, maxPrice, skip, take } = productsFilter;
-
-        const hasCategories = categories && categories.length > 0;
-        const hasManufacturers = manufacturers && manufacturers.length > 0;
-
-        let autoCategories = categories;
-        if (name && !hasCategories) {
-            autoCategories = await this.categoriesService.getByProductName(name);
-        }
-
-        let autoManufacturers = manufacturers;
-        if ((name || hasCategories) && !hasManufacturers) {
-            autoManufacturers = await this.getManufacturers(name, autoCategories);
-        }
-
-        return {
-            skip: skip ?? PaginationDefaults.SKIP,
-            take: take ?? PaginationDefaults.TAKE,
-            minPrice: minPrice ?? 0,
-            maxPrice: maxPrice ?? Number.MAX_VALUE,
-            name: name ?? '',
-            manufacturers: autoManufacturers ?? [],
-            categories: autoCategories ?? [],
-        };
-
-
-    }
-
-    private buildCategoryFilter(categories?: Category[]): any {
-        if (!categories || categories.length === 0) return undefined;
-        return { categories: { some: { categoryId: { in: categories.map(category => category.id) } } } };
-    }
-
-    async getManufacturers(name?: string, categories?: Category[]): Promise<string[]> {
-        const categoryFilter = this.buildCategoryFilter(categories);
-
-        return this.prismaService.product.findMany({
-            where: {
-                name: name ? { contains: name } : undefined,
-                ...categoryFilter,
-            },
-            distinct: ['manufacturer'],
-        }).then(products => products.map(product => product.manufacturer));
-    }
-
-
-
-    async getPagedProductsByFilter(filterDto: ProductsFilterDto): Promise<Product[]> {
-        const categoryFilter = this.buildCategoryFilter(filterDto.categories);
-
-        return this.prismaService.product.findMany({
-            where: {
-                AND: [
-                    { price: { gte: filterDto.minPrice } },
-                    { price: { lte: filterDto.maxPrice } },
-                    { name: { contains: filterDto.name } },
-                    { manufacturer: filterDto.manufacturers?.length ? { in: filterDto.manufacturers } : undefined },
-                    categoryFilter,
-                ],
-            },
-            skip: filterDto.skip,
-            take: filterDto.take,
-            include: { categories: true, specifications: true },
-        });
     }
 
 }
