@@ -15,10 +15,16 @@ const { Header, Content } = Layout;
 function CustomLayout({ children }: React.PropsWithChildren) {
   const dispatch = useAppDispatch();
   const authUser = useAppSelector((state) => state.auth.user);
-  const token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
+
+  let token: string | null = null;
+  if(typeof window !== 'undefined') {
+    token = localStorage.getItem(ACCESS_TOKEN_STORAGE);
+  }
+
   const { data: user, error, isLoading } = useGetUserProfileQuery(undefined, {
     skip: !token
   });
+  
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
