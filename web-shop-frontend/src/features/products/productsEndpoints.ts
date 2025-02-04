@@ -2,6 +2,8 @@ import { apiSlice } from "../api/apiSlice";
 import { Category } from "./models/category";
 import { Product } from "./models/product";
 import { ProductDto } from "./models/productDto";
+import { ProductFilter } from "./models/productFilter";
+import { ProductSearchResponse } from "./models/productSearchResponse";
 
 const createProductFormData = (product: ProductDto): FormData => {
   const formData = new FormData();
@@ -30,6 +32,7 @@ const createProductFormData = (product: ProductDto): FormData => {
 
 const productEndpoints = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
+
     createProduct: builder.mutation<Product, ProductDto>({
       query: (product: ProductDto) => ({
         url: '/products',
@@ -37,10 +40,26 @@ const productEndpoints = apiSlice.injectEndpoints({
         body: createProductFormData(product),
       }),
     }),
+
     getCategories: builder.query<Category[], void>({
       query: () => '/categories',
     }),
+
+    getProducts: builder.query<ProductSearchResponse, Partial<ProductFilter>>({
+      query: (filter) => ({
+        url: '/products',
+        params: new URLSearchParams(filter as Record<string, string>),
+      })
+    }),
+
+    getProduct: builder.query<Product, number>({
+      query: (id) => '/products/' + id,
+      transformResponse: (response) => ({
+        ...response,
+        categories: response.categories.map((category) => category.category)
+      })
+    })
   }),
 });
 
-export const { useCreateProductMutation, useGetCategoriesQuery } = productEndpoints;
+export const { useCreateProductMutation, useGetCategoriesQuery, useGetProductsQuery, useGetProductQuery } = productEndpoints;

@@ -1,12 +1,15 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { Product } from "./models/product";
 import { Category } from "./models/category";
-import { DeleteColumnOutlined } from "@ant-design/icons";
+import { ProductFilter } from "./models/productFilter";
+
 
 interface ProductState {
     products: Product[] | null;
     product: Product | null;
     categories: Category[] | null;
+    availableFilter: ProductFilter | null;
+    chosenFilter: ProductFilter | null;
 
 }
 
@@ -14,6 +17,8 @@ const initialState: ProductState = {
     products: null,
     product: null,
     categories: null,
+    availableFilter: null,
+    chosenFilter: null
 };
 
 export const productSlice = createSlice({
@@ -22,6 +27,11 @@ export const productSlice = createSlice({
     reducers: {
         setProducts: (state, action) => {
             state.products = action.payload;
+        },
+        setDataFromSeatch: (state, action) => {
+            console.log(action.payload)
+            state.products = action.payload.products;
+            state.availableFilter = action.payload.filter;
         },
         setProduct: (state, action) => {
             state.product = action.payload;
@@ -70,6 +80,12 @@ export const productSlice = createSlice({
                 state.categories = state.categories.filter((category) => category.id !== action.payload);
             }
         },
+        setAvailableFilter: (state, action) => {
+            state.availableFilter = action.payload;
+        },
+        setChosenFilter: (state, action) => {
+            state.chosenFilter = action.payload;
+        },
 
     }
 })
@@ -81,5 +97,12 @@ export const { addProduct,
     setCategories,
     updateCategory,
     deleteCategory,
+    setProduct,
+    resetProduct,
+    setProducts,
+    setAvailableFilter,
+    setChosenFilter,
+    setDataFromSeatch,
+
      } = productSlice.actions;
 export default productSlice.reducer;
