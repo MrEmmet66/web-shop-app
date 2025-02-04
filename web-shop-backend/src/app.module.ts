@@ -18,6 +18,7 @@ import { extname } from 'path';
 
 @Module({
   imports: [
+    
     CategoriesModule,
     MulterModule.register({
       storage: diskStorage({
