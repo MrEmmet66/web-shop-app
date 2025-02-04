@@ -193,6 +193,14 @@ export class ProductsService {
     async getProductById(productId: number): Promise<Product | null> {
         return this.prisma.product.findUnique({
             where: { id: productId },
+            include: {
+                categories: {
+                    include: {
+                        category: true
+                    }
+                },
+                specifications: true
+            }
         });
     }
 
