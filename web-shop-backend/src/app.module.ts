@@ -1,3 +1,7 @@
+import { CartController } from './cart/cart.controller';
+import { CartService } from './cart/cart.service';
+import { CartModule } from './cart/cart.module';
+import { OrdersModule } from './orders/orders.module';
 import { CategoriesService } from './categories/categories.service';
 import { CatergoriesController } from './categories/catergories.controller';
 import { CategoriesModule } from './categories/categories.module';
@@ -17,7 +21,10 @@ import { extname } from 'path';
 
 @Module({
   imports: [
-    
+    PrismaModule,
+    CartModule,
+    OrdersModule,
+
     CategoriesModule,
     MulterModule.register({
       storage: diskStorage({
@@ -33,14 +40,15 @@ import { extname } from 'path';
       isGlobal: true,
     }),
     MailModule,
-    PrismaModule,
     UsersModule,
     AuthModule,
   ],
   controllers: [
+    CartController,
     CatergoriesController,
     ProductsController],
   providers: [
+    CartService,
     CategoriesService,
     ProductsService,
   ],

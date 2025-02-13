@@ -69,7 +69,6 @@ export class AuthService {
             name: user.name,
             passwordHash: hashedPassword,
             passwordSalt: salt,
-            phoneNumber: user.phoneNumber,
         });
 
         await this.sendConfirmationEmail(registeredUser);

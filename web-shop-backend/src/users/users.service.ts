@@ -19,9 +19,23 @@ export class UsersService {
     }
 
     async createUser(data: Prisma.UserCreateInput): Promise<User> {
-        return this.prismaService.user.create({
-            data,
+
+        const createdUser = this.prismaService.user.create({
+            data: {
+                ...data,
+            }
         });
+
+        return this.prismaService.user.update({
+            where: { id: (await createdUser).id },
+            data: {
+                cart: {
+                    create: {
+                        userId: (await createdUser).id
+                    }
+                }
+            }
+        })
     }
 
     async updateUser(id: number, data: Prisma.UserUpdateInput): Promise<User> {
