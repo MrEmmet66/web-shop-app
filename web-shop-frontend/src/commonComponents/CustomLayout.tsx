@@ -1,14 +1,18 @@
 "use client"
 
+import './CustomLayout.module.css'
 import React, { useEffect, useState } from "react";
 import { Layout, Button } from "antd";
 import { useAppSelector, useAppDispatch } from "@/redux/hooks";
 import { useGetUserProfileQuery } from "@/features/auth/authEndpoints";
 import { setAuthState, resetAuthState } from "@/features/auth/authSlice";
 import UserMiniProfileModal from "@/features/users/components/UserMiniProfileModal";
-import { useRouter } from "next/router";
 import Link from "next/link";
 import { ACCESS_TOKEN_STORAGE } from "@/constants";
+import { ShoppingCartOutlined } from '@ant-design/icons';
+import CartModal from '@/features/orders/components/CartModal';
+import { useGetCartQuery } from '@/features/orders/orderEndpoints';
+import { setCart } from '@/features/orders/cartSlice';
 
 const { Header, Content } = Layout;
 
@@ -24,8 +28,17 @@ function CustomLayout({ children }: React.PropsWithChildren) {
   const { data: user, error, isLoading } = useGetUserProfileQuery(undefined, {
     skip: !token
   });
+
+  const { data: cart, error: cartError, isLoading: cartLoading } = useGetCartQuery()
   
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isCartModalVisible, setIsCartModalVisible] = useState(false);
+
+  useEffect(() => {
+    if(cart) {
+      dispatch(setCart(cart));
+    }
+  }, [cart])
 
   useEffect(() => {
     if (user) {
@@ -33,7 +46,7 @@ function CustomLayout({ children }: React.PropsWithChildren) {
     } else if (!token) {
       dispatch(resetAuthState());
     }
-  }, [user, token, dispatch]);
+  }, [user, token]);
 
   const showModal = () => {
     setIsModalVisible(true);
@@ -48,8 +61,9 @@ function CustomLayout({ children }: React.PropsWithChildren) {
     <Layout>
       <Header title="Web-Shop">
         {authUser ? (
-          <div style={{ color: "white" }}>
+          <div className='header'>
             Welcome <span onClick={showModal} style={{ cursor: "pointer" }}>{authUser.email}</span>
+            <Button type='primary' icon={<ShoppingCartOutlined/>} onClick={() => setIsCartModalVisible(true)} />
           </div>
         ) : (
           <div style={{ color: "white" }}>
@@ -67,6 +81,7 @@ function CustomLayout({ children }: React.PropsWithChildren) {
       </Header>
       <Content>{children}</Content>
       {authUser && <UserMiniProfileModal visible={isModalVisible} onCancel={handleCancel} user={authUser} />}
+      {authUser && <CartModal visible={isCartModalVisible} onClose={() => setIsCartModalVisible(false)} />}
     </Layout>
   );
 }
